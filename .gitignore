@@ -22,3 +22,7 @@ htmlcov/
 
 # VS Code Local History
 .history/
+
+# Node / Dashboard
+node_modules/
+dashboard/dist/

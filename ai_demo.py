@@ -1,12 +1,14 @@
 """PACT AI Demo — 4 LLM-powered agents, 3 phases, 1 story.
 
-Each agent is backed by GPT-5-mini (OpenAI) and autonomously decides
+Each agent is backed by Mercury 2 (OpenAI) and autonomously decides
 what PACT actions to take. An orchestrator cues each agent per Act.
 
 Usage:
     1. Start the server: uv run uvicorn src.pact.server:app
     2. Run this demo:    uv run python ai_demo.py
 """
+
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import httpx
 from dotenv import load_dotenv
@@ -27,6 +29,16 @@ def header(title: str):
     print(f"\n{BOLD}{'='*60}")
     print(f"  {title}")
     print(f"{'='*60}{RESET}")
+
+
+def par(*tasks):
+    """Run (agent, instruction) pairs in parallel, return results in order."""
+    results = [None] * len(tasks)
+    with ThreadPoolExecutor(max_workers=len(tasks)) as pool:
+        futures = {pool.submit(agent.act, instr): i for i, (agent, instr) in enumerate(tasks)}
+        for f in as_completed(futures):
+            results[futures[f]] = f.result()
+    return results
 
 
 def main():
@@ -55,99 +67,89 @@ def main():
     http = httpx.Client(base_url=BASE, timeout=10)
 
     header("PACT AI Demo — LLM-Powered Autonomous Agents")
-    print(f"  Each agent is backed by GPT-5-mini (OpenAI)")
+    print(f"  Each agent is backed by Mercury 2 (Inception)")
     print(f"  The LLM decides what actions to take at each step")
 
-    # ── Setup: register + verify ───────────────────────────────────────────────
+    # ── Setup: register + verify (all 4 in parallel) ──────────────────────────
     header("Setup — Agent Registration")
-    for agent in [acme, beta, gamma, delta]:
-        agent.act("Register yourself on the PACT network and verify your identity. Use your actual domain, name, and capabilities.")
+    par(
+        (acme, "Register yourself on the PACT network and verify your identity. Use your actual domain, name, and capabilities."),
+        (beta, "Register yourself on the PACT network and verify your identity. Use your actual domain, name, and capabilities."),
+        (gamma, "Register yourself on the PACT network and verify your identity. Use your actual domain, name, and capabilities."),
+        (delta, "Register yourself on the PACT network and verify your identity. Use your actual domain, name, and capabilities."),
+    )
 
     # ── Act 1: Handshake ───────────────────────────────────────────────────────
     header("ACT 1 — The Handshake (Phase 1)")
 
     acme.act(
-        f"You already work with Beta Logistics (agent_id={beta.agent_id}). "
-        f"Propose a bond to them for shipping services. The terms dict MUST include a key called 'service' "
-        f"(e.g. 'shipping'). Also include sla, pricing, and data_format keys."
+        f"Propose a bond to Beta Logistics (agent_id={beta.agent_id}) "
+        f"with terms: service='shipping', sla='48h', pricing='per-shipment', data_format='EDI'."
     )
 
     beta.act(
-        f"Acme Manufacturing (agent_id={acme.agent_id}) has proposed a bond to you. "
-        f"List the bonds to find the pending proposal, then accept it."
-    )
-
-    acme_act1 = acme.act(
-        f"You have an active bond with Beta Logistics. Find your bond with them, "
-        f"then start a request_quote interaction. Then send the first message with "
-        f"required fields: item (e.g. 'Industrial Valves') and quantity (e.g. '500'). "
-        f"Return the interaction_id in your response."
-    )
-
-    # Extract interaction_id from Acme's response to pass to Beta
-    import re
-    ix_match = re.search(r'[a-f0-9]{8}', acme_act1.split("interaction")[1] if "interaction" in acme_act1 else "")
-    ix_hint = f" The interaction_id is likely {ix_match.group()}" if ix_match else ""
-
-    beta.act(
-        f"Acme has sent you a quote request in an active interaction on your bond.{ix_hint}. "
-        f"Use send_interaction_message with the SAME interaction_id that Acme used. "
-        f"Do NOT create a new interaction. The required fields for this step are: "
-        f"price (e.g. '2500.00'), currency (e.g. 'USD'), and valid_until (e.g. '2026-04-01')."
+        f"Acme (agent_id={acme.agent_id}) proposed a bond. List bonds, find the pending one, accept it."
     )
 
     acme.act(
-        f"Beta has responded with a shipping quote in the interaction.{ix_hint}. "
-        f"Send your decision using send_interaction_message on the SAME interaction_id. "
-        f"The only required field is 'decision' (e.g. 'accepted')."
+        f"Find your bond with Beta, create a request_quote interaction, "
+        f"then send first message with item='Industrial Valves' and quantity='500'."
+    )
+
+    # Get the interaction_id reliably from the server
+    all_ix = http.get("/interactions").json()
+    ix_id = next((ix["id"] for ix in all_ix if ix["status"] == "active"), "unknown")
+
+    beta.act(
+        f"Acme has sent you a quote request in interaction_id={ix_id}. "
+        f"Use send_interaction_message with exactly that interaction_id. "
+        f"Do NOT create a new interaction. "
+        f"Required fields: price ('2500.00'), currency ('USD'), valid_until ('2026-04-01')."
+    )
+
+    acme.act(
+        f"Beta has responded with a shipping quote in interaction_id={ix_id}. "
+        f"Use send_interaction_message with exactly that interaction_id. "
+        f"Required field: decision ('accepted')."
     )
 
     # ── Act 2: Discovery ───────────────────────────────────────────────────────
     header("ACT 2 — Discovery (Phase 2)")
 
     acme.act(
-        "You need accounting services with EDI integration for your manufacturing business. "
-        "Broadcast an intent on the PACT network describing what you need. "
-        "Use requirements tags that would match an accounting provider: 'accounting' and 'edi-integration'."
+        "You need accounting services with EDI integration. "
+        "Broadcast an intent with requirements: 'accounting' and 'edi-integration'."
     )
 
     gamma.act(
-        "Check if there are any open intents on the PACT network that match your capabilities. "
-        "If you find a match, respond with a compelling message about your services."
+        "Check for open intents matching your capabilities. If you find one, respond."
     )
 
     acme.act(
-        f"Gamma Accounting (agent_id={gamma.agent_id}) responded to your accounting intent. "
-        f"They seem like a good fit. Propose a bond to them. "
-        f"The terms dict MUST include a key called 'service' (value: 'accounting'). "
-        f"Also include scope, billing, and data_format keys."
+        f"Gamma Accounting (agent_id={gamma.agent_id}) responded to your intent. "
+        f"Propose a bond with terms including service='accounting', scope, billing, data_format."
     )
 
     gamma.act(
-        f"Acme Manufacturing (agent_id={acme.agent_id}) has proposed an accounting bond to you. "
-        f"List bonds to find the pending proposal and accept it."
+        f"Acme Manufacturing (agent_id={acme.agent_id}) proposed a bond. "
+        f"List bonds, find the pending one, accept it."
     )
 
     # ── Act 3: Web of Trust ────────────────────────────────────────────────────
     header("ACT 3 — Web of Trust (Phase 3)")
 
     beta.act(
-        "You also need an accountant for your logistics operations. "
-        "Instead of broadcasting, query your trust network for recommendations. "
-        "Use query_network with need='accounting' (use the exact short tag, not a long description)."
+        "You need accounting services. Query your trust network with need='accounting'."
     )
 
     beta.act(
-        f"You received a recommendation for Gamma Accounting (agent_id={gamma.agent_id}) "
-        f"through your trust network (referred by Acme). "
-        f"Propose a bond to Gamma for accounting services. "
-        f"The terms dict MUST include a key called 'service' (value: 'accounting'). "
-        f"Also include scope and referred_by keys."
+        f"Propose a bond to Gamma Accounting (agent_id={gamma.agent_id}) "
+        f"with terms: service='accounting', scope='logistics', referred_by='Acme'."
     )
 
     gamma.act(
-        f"Beta Logistics (agent_id={beta.agent_id}) has proposed an accounting bond to you "
-        f"(they were referred by Acme). List bonds to find and accept the pending proposal."
+        f"Beta Logistics (agent_id={beta.agent_id}) proposed a bond. "
+        f"List bonds, find the pending one, accept it."
     )
 
     # ── Finale ─────────────────────────────────────────────────────────────────
@@ -171,7 +173,7 @@ def main():
 
     print(f"\n  {GREEN}{'='*60}")
     print(f"  ✓ AI agents autonomously built a trust network using PACT.")
-    print(f"    Every decision was made by GPT-5-mini — not scripted.")
+    print(f"    Every decision was made by Mercury 2 — not scripted.")
     print(f"    The 'tourist → local' transition, powered by AI.")
     print(f"  {'='*60}{RESET}\n")
 

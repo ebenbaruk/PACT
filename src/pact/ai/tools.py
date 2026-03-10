@@ -159,6 +159,14 @@ PACT_TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "list_interactions",
+            "description": "List all interactions in the system",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "create_interaction",
             "description": "Start a structured interaction (e.g. request_quote) on an active bond",
             "parameters": {

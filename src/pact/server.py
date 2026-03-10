@@ -4,6 +4,7 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from .crypto import verify
@@ -11,11 +12,41 @@ from .templates import TEMPLATES, validate_message
 
 app = FastAPI(title="PACT — Protocol for Agent Coordination & Trust", version="0.1.0")
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # ── In-memory storage ──────────────────────────────────────────────────────────
 agents: dict[str, dict] = {}
 bonds: dict[str, dict] = {}
 interactions: dict[str, dict] = {}
 intents: dict[str, dict] = {}
+activity_log: list[dict] = []
+
+_activity_idx = 0
+
+
+def _agent_name(agent_id: str) -> str:
+    return agents[agent_id]["name"] if agent_id in agents else agent_id
+
+
+def _log_activity(event_type: str, source_id: str, target_id: str = "", status: str = "ok", detail: str = ""):
+    global _activity_idx
+    _activity_idx += 1
+    activity_log.append({
+        "idx": _activity_idx,
+        "type": event_type,
+        "source_id": source_id,
+        "source_name": _agent_name(source_id),
+        "target_id": target_id,
+        "target_name": _agent_name(target_id) if target_id else "",
+        "status": status,
+        "detail": detail,
+        "timestamp": _now(),
+    })
 
 
 # ── Request models ─────────────────────────────────────────────────────────────
@@ -107,6 +138,30 @@ def _trust_score(agent_id: str) -> float:
     return min(1.0, bond_count * 0.15 + referral_count * 0.1 + avg_age / 365 * 0.3)
 
 
+# ── Dashboard endpoints ──────────────────────────────────────────────────────
+@app.get("/agents")
+def list_agents():
+    return list(agents.values())
+
+
+@app.get("/activity")
+def get_activity():
+    return activity_log[-50:]
+
+
+@app.get("/stats")
+def get_stats():
+    active_bonds = [b for b in bonds.values() if b["status"] == "active"]
+    avg_trust = (
+        sum(_trust_score(a) for a in agents) / len(agents) if agents else 0
+    )
+    return {
+        "agent_count": len(agents),
+        "bond_count": len(active_bonds),
+        "avg_trust": round(avg_trust, 3),
+    }
+
+
 # ── Phase 1: Handshake ────────────────────────────────────────────────────────
 @app.post("/agents/register")
 def register_agent(req: RegisterAgent):
@@ -120,6 +175,8 @@ def register_agent(req: RegisterAgent):
         "verified": False,
         "created_at": _now(),
     }
+    _log_activity("register", agent_id, status="registered",
+                  detail=f"{req.name} ({req.domain}) — {', '.join(req.capabilities)}")
     return agents[agent_id]
 
 
@@ -158,6 +215,9 @@ def propose_bond(req: ProposeBond):
         "signatures": {"proposer": req.signature},
         "created_at": _now(),
     }
+    svc = req.terms.get("service", "?")
+    _log_activity("propose_bond", req.proposer_id, req.accepter_id, "proposed",
+                  detail=f"Bond for {svc}")
     return bonds[bond_id]
 
 
@@ -173,6 +233,9 @@ def accept_bond(bond_id: str, req: AcceptBond):
     bond["status"] = "active"
     bond["signatures"]["accepter"] = req.signature
     bond["accepted_at"] = _now()
+    svc = bond["terms"].get("service", "?")
+    _log_activity("accept_bond", bond["accepter_id"], bond["proposer_id"], "active",
+                  detail=f"Bond for {svc} now active")
     return bond
 
 
@@ -200,6 +263,8 @@ def broadcast_intent(req: BroadcastIntent):
         "responses": [],
         "created_at": _now(),
     }
+    _log_activity("broadcast_intent", req.agent_id, status="open",
+                  detail=f"Need: {req.need[:60]}")
     return intents[intent_id]
 
 
@@ -225,6 +290,8 @@ def respond_to_intent(intent_id: str, req: RespondIntent):
     intent = intents[intent_id]
     response = {"agent_id": req.agent_id, "message": req.message, "created_at": _now()}
     intent["responses"].append(response)
+    _log_activity("respond_intent", req.agent_id, intent["agent_id"], "responded",
+                  detail=req.message[:80])
     return response
 
 
@@ -278,6 +345,11 @@ def get_network(agent_id: str):
 
 
 # ── Interactions ───────────────────────────────────────────────────────────────
+@app.get("/interactions")
+def list_interactions():
+    return list(interactions.values())
+
+
 @app.post("/interactions/create")
 def create_interaction(req: CreateInteraction):
     _bond_or_404(req.bond_id)
@@ -322,4 +394,10 @@ def send_message(interaction_id: str, req: SendMessage):
     if ix["current_step"] >= len(template["steps"]):
         ix["status"] = "completed"
 
+    data_preview = ", ".join(f"{k}={v}" for k, v in list(req.data.items())[:3])
+    _log_activity("send_message", req.sender_id,
+                  ix["initiator_id"] if req.sender_id != ix["initiator_id"] else "",
+                  ix["status"], detail=f"[{ix['template']}] {data_preview}")
     return {"message": msg, "interaction_status": ix["status"]}
+
+

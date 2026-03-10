@@ -1,0 +1,424 @@
+/* ── PACT Design System ─────────────────────────────────────────────────── */
+
+:root {
+  --bg: #e4e3dd;
+  --ink: #2a2a28;
+  --ink-50: rgba(42, 42, 40, 0.5);
+  --ink-20: rgba(42, 42, 40, 0.2);
+  --ink-10: rgba(42, 42, 40, 0.1);
+  --accent: #5a7a5a;
+  --warn: #a05a3c;
+  --font-display: "Space Grotesk", sans-serif;
+  --font-mono: "Space Mono", monospace;
+  --corner: 12px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 14px;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Layout ────────────────────────────────────────────────────────────── */
+
+.app {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  min-height: 100vh;
+}
+
+.main-grid {
+  display: grid;
+  grid-template-columns: 48px 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 0;
+  min-height: 0;
+}
+
+.section {
+  position: relative;
+  border-top: 1px solid var(--ink-20);
+  border-left: 1px solid var(--ink-20);
+  padding: 24px 28px;
+  overflow: auto;
+}
+
+.section--net {
+  grid-row: 1 / 3;
+  grid-column: 2;
+  border-left: none;
+}
+
+.section--log {
+  grid-row: 1;
+  grid-column: 1;
+}
+
+.section--sys {
+  grid-row: 2;
+  grid-column: 1;
+}
+
+/* Actually we want: left rail labels | NET (big, right) + LOG (top-left) + SYS (bottom-left) */
+/* Revised layout: */
+.main-grid {
+  grid-template-columns: 1fr 1.4fr;
+  grid-template-rows: 1fr 1fr;
+}
+
+.section--net {
+  grid-row: 1 / 3;
+  grid-column: 2;
+  border-left: 1px solid var(--ink-20);
+}
+
+.section--log {
+  grid-row: 1;
+  grid-column: 1;
+}
+
+.section--sys {
+  grid-row: 2;
+  grid-column: 1;
+}
+
+/* ── Rail label ────────────────────────────────────────────────────────── */
+
+.rail-label {
+  position: absolute;
+  top: 24px;
+  left: -2px;
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  transform: rotate(180deg);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.7rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--ink-50);
+  user-select: none;
+}
+
+/* ── Section title ─────────────────────────────────────────────────────── */
+
+.section-title {
+  font-family: var(--font-display);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-50);
+  margin-bottom: 16px;
+}
+
+/* ── TopBar ────────────────────────────────────────────────────────────── */
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 28px;
+  border-bottom: 1px solid var(--ink-20);
+}
+
+.topbar__brand {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.1rem;
+  letter-spacing: 0.08em;
+}
+
+.topbar__right {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+}
+
+.topbar__version {
+  color: var(--ink-50);
+}
+
+/* ── Status dot ────────────────────────────────────────────────────────── */
+
+.status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--warn);
+}
+
+.status-dot--live {
+  background: var(--accent);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+
+/* ── Node boxes (bracket corners) ──────────────────────────────────────── */
+
+.node {
+  position: absolute;
+  background: var(--bg);
+  border: none;
+  padding: 14px 18px;
+  min-width: 160px;
+  font-size: 0.75rem;
+  transition: transform 0.4s ease;
+}
+
+.node::before,
+.node::after,
+.node-inner::before,
+.node-inner::after {
+  content: "";
+  position: absolute;
+  width: var(--corner);
+  height: var(--corner);
+  border-color: var(--ink);
+  border-style: solid;
+}
+
+.node::before {
+  top: 0;
+  left: 0;
+  border-width: 1.5px 0 0 1.5px;
+}
+
+.node::after {
+  top: 0;
+  right: 0;
+  border-width: 1.5px 1.5px 0 0;
+}
+
+.node-inner::before {
+  bottom: 0;
+  left: 0;
+  border-width: 0 0 1.5px 1.5px;
+}
+
+.node-inner::after {
+  bottom: 0;
+  right: 0;
+  border-width: 0 1.5px 1.5px 0;
+}
+
+.node__name {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.85rem;
+  margin-bottom: 4px;
+}
+
+.node__domain {
+  color: var(--ink-50);
+  font-size: 0.7rem;
+  margin-bottom: 6px;
+}
+
+.node__key {
+  font-size: 0.65rem;
+  color: var(--ink-50);
+  letter-spacing: 0.05em;
+}
+
+.node__trust {
+  margin-top: 6px;
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 0.8rem;
+}
+
+/* ── SVG bond lines ────────────────────────────────────────────────────── */
+
+.bond-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.bond-line {
+  stroke: var(--ink);
+  stroke-width: 1;
+  stroke-dasharray: 6 6;
+  animation: dash-flow 1.5s linear infinite;
+  fill: none;
+}
+
+@keyframes dash-flow {
+  to {
+    stroke-dashoffset: -24;
+  }
+}
+
+.bond-label-html {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--ink-50);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+/* ── Activity table ────────────────────────────────────────────────────── */
+
+.activity-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.72rem;
+}
+
+.activity-table th {
+  font-family: var(--font-display);
+  font-weight: 700;
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--ink-20);
+  color: var(--ink-50);
+  font-size: 0.65rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.activity-table td {
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--ink-10);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 120px;
+}
+
+.activity-table tr:last-child td {
+  border-bottom: none;
+}
+
+.activity-row {
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.activity-row:hover {
+  background: var(--ink-10);
+}
+
+.activity-row--active {
+  background: var(--ink-10);
+}
+
+.activity-detail-row td {
+  padding: 0 8px 8px !important;
+  border-bottom: 1px solid var(--ink-20) !important;
+}
+
+.activity-detail {
+  font-size: 0.7rem;
+  color: var(--ink);
+  line-height: 1.5;
+  padding: 8px 12px;
+  background: rgba(42, 42, 40, 0.05);
+  border-left: 2px solid var(--ink-20);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ── SystemInfo ────────────────────────────────────────────────────────── */
+
+.sys-headline {
+  font-family: var(--font-display);
+  font-size: 1.8rem;
+  font-weight: 700;
+  line-height: 1.15;
+  margin-bottom: 28px;
+  max-width: 320px;
+}
+
+.sys-headline span {
+  color: var(--ink-50);
+}
+
+.sys-stats {
+  display: flex;
+  gap: 32px;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stat__value {
+  font-family: var(--font-display);
+  font-size: 1.8rem;
+  font-weight: 700;
+}
+
+.stat__label {
+  font-size: 0.65rem;
+  color: var(--ink-50);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* ── Trust network container ───────────────────────────────────────────── */
+
+.trust-network {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 400px;
+}
+
+/* ── Empty state ───────────────────────────────────────────────────────── */
+
+.empty-state {
+  color: var(--ink-50);
+  font-size: 0.8rem;
+  font-style: italic;
+  padding: 24px 0;
+}
+
+/* ── Scrollbar ─────────────────────────────────────────────────────────── */
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--ink-20);
+  border-radius: 3px;
+}

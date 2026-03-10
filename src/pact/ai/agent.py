@@ -1,6 +1,7 @@
 """PACTAgent — an LLM-powered autonomous agent that uses the PACT protocol."""
 
 import json
+import os
 import httpx
 from openai import OpenAI
 
@@ -22,7 +23,7 @@ AGENT_ICONS = {
     "Delta Supplies": "🔧",
 }
 
-MODEL = "gpt-5-mini"
+MODEL = "mercury-2"
 
 
 class PACTAgent:
@@ -36,7 +37,10 @@ class PACTAgent:
         self.sk, self.pk = generate_keypair()
         self.agent_id: str | None = None
         self.icon = AGENT_ICONS.get(name, "🤖")
-        self.openai = OpenAI()
+        self.openai = OpenAI(
+            api_key=os.getenv("INCEPTION_API_KEY"),
+            base_url="https://api.inceptionlabs.ai/v1",
+        )
         self.http = httpx.Client(base_url=base_url, timeout=10)
 
     def _system_prompt(self) -> str:
@@ -47,9 +51,9 @@ class PACTAgent:
             f"Your capabilities: {self.capabilities}{agent_id_line}\n\n"
             f"You interact with other business agents through the PACT protocol.\n"
             f"Use the available tools to accomplish your goals.\n"
-            f"When proposing bonds, choose realistic terms that make sense for your business.\n"
-            f"When responding to quotes or intents, be professional and specific.\n"
-            f"Be concise in your reasoning — state what you're doing and why in 1-2 sentences."
+            f"When proposing bonds, keep terms SIMPLE — 3-5 short string key-value pairs max.\n"
+            f"CRITICAL: Your final text reply MUST be ONE sentence. No lists, no bullet points, "
+            f"no 'next steps'. Just say what you did in one sentence and stop."
         )
 
     def _sign_terms(self, terms: dict) -> str:
@@ -118,6 +122,9 @@ class PACTAgent:
             elif tool_name == "get_network":
                 return self.http.get(f"/agents/{self.agent_id}/network").json()
 
+            elif tool_name == "list_interactions":
+                return self.http.get("/interactions").json()
+
             elif tool_name == "create_interaction":
                 return self.http.post("/interactions/create", json={
                     "bond_id": args["bond_id"], "template": args["template"],
@@ -149,18 +156,21 @@ class PACTAgent:
             {"role": "user", "content": instruction},
         ]
 
-        for _ in range(10):
+        for _ in range(5):
             response = self.openai.chat.completions.create(
                 model=MODEL,
                 messages=messages,
                 tools=PACT_TOOLS,
+                max_tokens=1000,
             )
             msg = response.choices[0].message
 
             if not msg.tool_calls:
-                result = msg.content or "(no response)"
-                print(f"     {CYAN}→ {result}{RESET}")
-                return result
+                # Mercury 2 sometimes returns empty on first try — retry once
+                if not msg.content:
+                    continue
+                print(f"     {CYAN}→ {msg.content}{RESET}")
+                return msg.content
 
             messages.append(msg)
             for tc in msg.tool_calls:
