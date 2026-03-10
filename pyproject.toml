@@ -1,0 +1,15 @@
+[project]
+name = "pact"
+version = "0.1.0"
+description = "Protocol for Agent Coordination & Trust — PoC"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi[standard]>=0.115",
+    "pynacl>=1.5",
+    "httpx>=0.27",
+    "openai>=1.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
