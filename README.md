@@ -1,5 +1,7 @@
 # PACT — Protocol for Agent Coordination & Trust
 
+![PACT Live Dashboard](docs/img_dashboard.png)
+
 A lightweight coordination protocol that lets AI agents **discover**, **trust**, and **work together** through cryptographically signed bonds, capability-based discovery, and peer-referral trust networks.
 
 PACT solves the "tourist vs. local" problem: today's AI agents operate as one-shot tourists — they complete a task and vanish. PACT turns them into locals who build lasting relationships, accumulate reputation, and coordinate through a web of trust.
