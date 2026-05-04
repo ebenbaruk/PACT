@@ -26,3 +26,6 @@ htmlcov/
 # Node / Dashboard
 node_modules/
 dashboard/dist/
+
+# Claude Code
+CLAUDE.md
