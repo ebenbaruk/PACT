@@ -33,8 +33,9 @@ dashboard/             ← Live React dashboard (Vite + TypeScript)
 │       └── SystemInfo.tsx
 └── vite.config.ts
 
-ai_demo.py             ← AI demo — 4 autonomous agents, 3 acts
-demo.py                ← Scripted demo — same flow, no LLM
+Demo/
+├── ai_demo.py         ← AI demo — 4 autonomous agents, 3 acts
+└── demo.py            ← Scripted demo — same flow, no LLM
 ```
 
 ---
@@ -48,13 +49,13 @@ Two agents form a **bond** — a cryptographically signed partnership agreement 
 1. Agent A registers on the network with its domain, name, public key, and capabilities
 2. Agent A proposes a bond to Agent B with terms (service type, SLA, pricing, data format)
 3. Both sides sign the terms with Ed25519 — the bond becomes active
-4. Agents interact through **structured templates** (e.g., `request_quote`, `place_order`) where each step has required fields enforced by the server
+4. Agents interact through **structured templates** (e.g., `request_booking`, `request_quote`, `place_order`) where each step has required fields enforced by the server
 
 ### Phase 2: Discovery
 
 Agents find new partners by broadcasting needs to the network.
 
-1. Agent A broadcasts an **intent**: "I need accounting services with EDI integration"
+1. Agent A broadcasts an **intent**: "I need a mobility agent for car rental"
 2. The server matches intents against registered agent capabilities
 3. Agent C (matching capabilities) discovers the intent and responds
 4. If interested, they establish a bond (back to Phase 1)
@@ -63,8 +64,8 @@ Agents find new partners by broadcasting needs to the network.
 
 Agents leverage existing bonds to find vetted partners through peer referrals.
 
-1. Agent B needs accounting services but doesn't broadcast — it queries its **trust network**
-2. The server traverses B's bonds, finds B's partner A, then finds A's partner C who has accounting capabilities
+1. Agent B needs an accommodation provider but doesn't broadcast — it queries its **trust network**
+2. The server traverses B's bonds, finds B's partner A, then finds A's partner C who has accommodation capabilities
 3. B receives a recommendation for C with trust score, referred by A
 4. B proposes a bond to C, citing the referral
 
@@ -99,6 +100,14 @@ The server rejects any bond or message with an invalid signature.
 ## Interaction Templates
 
 Structured message flows that enforce required fields at each step:
+
+**`request_booking`** — Request a booking (hotel, car rental, etc.)
+
+| Step | Role | Required Fields |
+|------|------|-----------------|
+| 0 | Requester | `item`, `check_in`, `check_out`, `guests` |
+| 1 | Provider | `booking_id`, `total_price`, `currency` |
+| 2 | Requester | `decision` |
 
 **`request_quote`** — Request a price quote
 
@@ -222,77 +231,77 @@ Opens on `http://localhost:5173`. The dashboard polls the server every 2.5 secon
 **AI Demo** (autonomous LLM agents — recommended):
 
 ```bash
-uv run python ai_demo.py
+uv run python Demo/ai_demo.py
 ```
 
 **Scripted Demo** (no LLM, direct API calls):
 
 ```bash
-uv run python demo.py
+uv run python Demo/demo.py
 ```
 
 ---
 
 ## Demo Walkthrough
 
-The demo tells the story of 4 business agents building a trust network from scratch. Each agent is backed by **Mercury 2** (Inception Labs) and makes autonomous decisions using PACT protocol tools.
+The demo tells the story of 4 travel agents collaborating to organize a trip to Tokyo. Each agent is backed by **Mercury 2** (Inception Labs) and makes autonomous decisions using PACT protocol tools.
 
 ### The Agents
 
 | Agent | Domain | Capabilities | Role in the story |
 |-------|--------|--------------|-------------------|
-| Acme Manufacturing | acme.com | manufacturing, industrial-parts | Hub — initiates bonds and discovery |
-| Beta Logistics | beta-logistics.com | shipping, cold-chain, logistics | Acme's shipping partner |
-| Gamma Accounting | gamma-accounting.com | accounting, edi-integration, invoicing | Discovered via intent, then referred |
-| Delta Supplies | delta-supplies.com | raw-materials, bulk-supply | Registers but stays isolated (trust = 0) |
+| ✈️ Agent Vol (Flight) | vol-agent.ai | flight-booking, travel | Hub — formalizes bonds and broadcasts discovery |
+| 🏨 Agent Hôtel (Hotel) | hotel-agent.ai | accommodation, hospitality | Vol's booking partner, later reached via referral |
+| 🚗 Agent Location Voiture (Car Rental) | voiture-agent.ai | car-rental, mobility | Discovered through intent broadcast |
+| 💳 Agent Notes de Frais (Expense Report) | notes-frais-agent.ai | expense-management, accounting, reimbursement | Pre-existing partner of Vol; reaches Hôtel via referral |
 
 ### Setup — Agent Registration
 
-All 4 agents register on the PACT network **in parallel**. Each agent:
-1. Calls `register_agent` with its domain, name, and capabilities
-2. Calls `verify_agent` to confirm its identity
+All 4 agents register on the PACT network **in parallel**. Each agent calls `register_agent` with its domain, name, and capabilities, then `verify_agent` to confirm its identity.
 
-### Act 1 — The Handshake (Phase 1)
+A **pre-existing bond** between Notes de Frais and Vol is then established (Notes de Frais already audits Vol's expenses). This single bond enables the referral chain in Act 3.
 
-Acme and Beta already work together — they formalize it on-chain:
+### Act 1 — Formalize a Relationship (Mechanism 1, Phase 1)
 
-1. **Acme proposes a bond** to Beta with shipping terms (`service=shipping`, `sla=48h`, `pricing=per-shipment`, `data_format=EDI`)
-2. **Beta accepts** — the bond becomes active, both sides cryptographically signed
-3. **Acme starts an interaction** — creates a `request_quote` on their bond
-4. **Acme sends a quote request** — `item=Industrial Valves`, `quantity=500`
-5. **Beta responds** with pricing — `price=2500.00`, `currency=USD`, `valid_until=2026-04-01`
-6. **Acme accepts** the quote — `decision=accepted`, interaction completes
+Vol and Hôtel already collaborate — they formalize their relationship as a signed contract:
 
-### Act 2 — Discovery (Phase 2)
+1. **Vol proposes a bond** to Hôtel with travel-coordination terms (`service=travel-coordination`, `sla=24h confirmation`, `data_format=JSON`, `scope=client bookings`)
+2. **Hôtel accepts** — the bond becomes active, both sides cryptographically signed
+3. **Vol starts an interaction** — creates a `request_booking` on their bond
+4. **Vol sends a booking request** — `item=Chambre Tokyo`, `check_in=2026-03-12`, `check_out=2026-03-15`, `guests=1`
+5. **Hôtel responds** with confirmation — `booking_id=HTL-7842`, `total_price=450.00`, `currency=EUR`
+6. **Vol accepts** the booking — `decision=accepted`, interaction completes
 
-Acme needs an accountant — instead of searching manually, it broadcasts to the network:
+### Act 2 — Find Each Other Automatically (Mechanism 2, Phase 2)
 
-1. **Acme broadcasts an intent** — "I need accounting services" with requirements `['accounting', 'edi-integration']`
-2. **Gamma checks for matching intents** — the server matches Gamma's capabilities against Acme's requirements
-3. **Gamma responds** to the intent with a description of its services
-4. **Acme proposes a bond** to Gamma with accounting terms (`service=accounting`, `scope`, `billing`, `data_format`)
-5. **Gamma accepts** — second bond active
+The trip is extended by a week. Vol needs a car rental partner but doesn't know any:
 
-### Act 3 — Web of Trust (Phase 3)
+1. **Vol broadcasts an intent** — "I'm looking for a mobility agent" with requirements `['car-rental', 'mobility']`
+2. **Voiture checks for matching intents** — the server matches Voiture's capabilities against Vol's requirements
+3. **Voiture responds** to the intent with a description of its services
+4. **Vol proposes a bond** to Voiture with rental terms (`service=car-rental`, `duration=weekly`, `insurance=included`)
+5. **Voiture accepts** — bond active, no human in the loop
 
-Beta also needs accounting — but instead of broadcasting, it leverages its existing network:
+### Act 3 — Recommendation (Mechanism 3, Phase 3)
 
-1. **Beta queries its trust network** with `need=accounting`
-2. The server traverses: Beta → Acme (bonded) → Gamma (bonded, has accounting capability)
-3. **Beta receives a recommendation** for Gamma, referred by Acme, with trust score
-4. **Beta proposes a bond** to Gamma, citing the referral
-5. **Gamma accepts** — third bond active, triangle complete
+Notes de Frais needs to retrieve hotel invoices — instead of searching blindly, it leverages its trust network:
+
+1. **Notes de Frais queries its trust network** with `need=hospitality`
+2. The server traverses: Notes de Frais → Vol (bonded) → Hôtel (bonded, has accommodation capability)
+3. **Notes de Frais receives a recommendation** for Hôtel, referred by Vol, with trust score
+4. **Notes de Frais proposes a bond** to Hôtel, citing the referral
+5. **Hôtel accepts** — fourth bond active, network fully connected
 
 ### Finale — The Trust Network
 
 ```
-Acme Manufacturing      trust=0.300  bonds=[Beta Logistics, Gamma Accounting]
-Beta Logistics          trust=0.300  bonds=[Acme Manufacturing, Gamma Accounting]
-Gamma Accounting        trust=0.300  bonds=[Acme Manufacturing, Beta Logistics]
-Delta Supplies          trust=0.000  bonds=[none]
+✈️  Agent Vol                     trust=0.450  bonds=[Notes de Frais, Hôtel, Voiture]
+🏨  Agent Hôtel                   trust=0.300  bonds=[Vol, Notes de Frais]
+🚗  Agent Location Voiture        trust=0.150  bonds=[Vol]
+💳  Agent Notes de Frais          trust=0.300  bonds=[Vol, Hôtel]
 ```
 
-Three agents formed a fully connected trust triangle. Delta Supplies registered but never bonded — its trust score remains 0. Trust is earned through active participation, not mere presence.
+Four agents that didn't all know each other are now a fully connected network. Vol acted as the hub, with the highest trust score from formalizing relationships, broadcasting discovery, and being the bridge for a peer referral. Trust is earned through active participation, not mere presence.
 
 ---
 

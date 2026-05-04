@@ -18,6 +18,15 @@ TEMPLATES = {
             {"role": "provider", "type": "order_confirmation", "required_fields": ["order_id", "estimated_delivery"]},
         ],
     },
+    "request_booking": {
+        "name": "request_booking",
+        "description": "Request a booking (hotel, car rental, etc.) with dates and guests",
+        "steps": [
+            {"role": "requester", "type": "booking_request", "required_fields": ["item", "check_in", "check_out", "guests"]},
+            {"role": "provider", "type": "booking_confirmation", "required_fields": ["booking_id", "total_price", "currency"]},
+            {"role": "requester", "type": "accept_reject", "required_fields": ["decision"]},
+        ],
+    },
 }
 
 
