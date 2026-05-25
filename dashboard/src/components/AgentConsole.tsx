@@ -58,9 +58,6 @@ function StepCard({
       <div className="step-card__head">
         <span className="step-card__agent">{trace.agent.icon} {trace.agent.name}</span>
         <span className="step-card__step">Étape {trace.step_id}</span>
-        <span className={`badge ${trace.source === "ai" ? "badge--ai" : trace.source === "fallback" ? "badge--warn" : "badge--muted"}`}>
-          {trace.source === "ai" ? "🧠 IA" : trace.source === "fallback" ? "⚠️" : "scénarisé"}
-        </span>
       </div>
 
       <div className="step-card__narration">{trace.narration_fr}</div>

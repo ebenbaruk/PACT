@@ -1,5 +1,3 @@
-import type { StepTrace } from "../types";
-
 interface Props {
   loading: boolean;
   done: boolean;
@@ -7,18 +5,11 @@ interface Props {
   totalSteps: number;
   caption: string;
   isPunchline: boolean;
-  source: StepTrace["source"] | null;
   onNext: () => void;
   onPrev: () => void;
   onRestart: () => void;
   canPrev: boolean;
 }
-
-const SOURCE_BADGE: Record<StepTrace["source"], { label: string; cls: string }> = {
-  ai: { label: "🧠 Mercury 2", cls: "badge--ai" },
-  fallback: { label: "⚠️ secours scripté", cls: "badge--warn" },
-  scripted: { label: "scénarisé", cls: "badge--muted" },
-};
 
 export default function DemoControls({
   loading,
@@ -27,7 +18,6 @@ export default function DemoControls({
   totalSteps,
   caption,
   isPunchline,
-  source,
   onNext,
   onPrev,
   onRestart,
@@ -40,9 +30,6 @@ export default function DemoControls({
           {isPunchline ? "✓ " : ""}
           {caption}
         </span>
-        {!isPunchline && source && (
-          <span className={`badge ${SOURCE_BADGE[source].cls}`}>{SOURCE_BADGE[source].label}</span>
-        )}
       </div>
 
       <div className="controls__actions">

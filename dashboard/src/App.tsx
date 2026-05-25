@@ -141,7 +141,6 @@ export default function App() {
             totalSteps={totalSteps}
             caption={caption}
             isPunchline={done}
-            source={currentTrace?.source ?? null}
             onNext={onNext}
             onPrev={onPrev}
             onRestart={() => startDemo(selected)}

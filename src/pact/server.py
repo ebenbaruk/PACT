@@ -3,12 +3,16 @@
 import uuid
 from datetime import datetime, timezone
 
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from .crypto import verify
 from .templates import TEMPLATES, validate_message
+
+# Load .env so the guided demo's agents pick up INCEPTION_API_KEY (real Mercury 2).
+load_dotenv()
 
 app = FastAPI(title="PACT — Protocol for Agent Coordination & Trust", version="0.1.0")
 
