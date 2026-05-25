@@ -29,6 +29,17 @@ activity_log: list[dict] = []
 _activity_idx = 0
 
 
+def reset_store() -> None:
+    """Wipe all in-memory state. Used by the guided demo's /demo/reset."""
+    global _activity_idx
+    agents.clear()
+    bonds.clear()
+    interactions.clear()
+    intents.clear()
+    activity_log.clear()
+    _activity_idx = 0
+
+
 def _agent_name(agent_id: str) -> str:
     return agents[agent_id]["name"] if agent_id in agents else agent_id
 
@@ -399,5 +410,11 @@ def send_message(interaction_id: str, req: SendMessage):
                   ix["initiator_id"] if req.sender_id != ix["initiator_id"] else "",
                   ix["status"], detail=f"[{ix['template']}] {data_preview}")
     return {"message": msg, "interaction_status": ix["status"]}
+
+
+# ── Guided demo (dashboard-driven, presenter-controlled) ────────────────────────
+from .demo.router import router as demo_router  # noqa: E402  (after endpoints to keep load order simple)
+
+app.include_router(demo_router)
 
 

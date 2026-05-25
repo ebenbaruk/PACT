@@ -35,3 +35,66 @@ export interface Stats {
   bond_count: number;
   avg_trust: number;
 }
+
+/* ── Guided demo ─────────────────────────────────────────────────────────── */
+
+export interface TraceEvent {
+  kind: "thinking" | "tool_call" | "tool_result" | "final";
+  text?: string;
+  tool?: string;
+  args?: Record<string, unknown>;
+  ok?: boolean;
+  result?: unknown;
+}
+
+export interface AgentMessage {
+  from_name: string;
+  to_name: string;
+  kind: string;
+  summary: string;
+  payload?: Record<string, unknown>;
+}
+
+export interface StepAgent {
+  key: string;
+  name: string;
+  icon: string;
+}
+
+export interface StepTrace {
+  step_id: number;
+  phase: string;
+  narration_fr: string;
+  agent: StepAgent;
+  events: TraceEvent[];
+  messages: AgentMessage[];
+  final_text: string;
+  source: "ai" | "fallback" | "scripted";
+  step_idx: number;
+  total_steps: number;
+  done: boolean;
+}
+
+export interface DemoMeta {
+  id: string;
+  num: number;
+  title: string;
+  tagline: string;
+  problem: string;
+  punchline: string;
+}
+
+export interface ScenarioAgent {
+  key: string;
+  name: string;
+  domain: string;
+  icon: string;
+}
+
+export interface ScenarioOutline {
+  scenario: DemoMeta;
+  steps: { id: number; narration_fr: string }[];
+  agents: ScenarioAgent[];
+  total_steps: number;
+  ai_enabled: boolean;
+}

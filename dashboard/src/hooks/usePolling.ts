@@ -4,7 +4,7 @@ export function usePolling<T>(
   fetcher: () => Promise<T>,
   interval: number,
   initialValue: T,
-): { data: T; isLive: boolean } {
+): { data: T; isLive: boolean; refresh: () => void } {
   const [data, setData] = useState<T>(initialValue);
   const [isLive, setIsLive] = useState(false);
   const fetcherRef = useRef(fetcher);
@@ -26,5 +26,7 @@ export function usePolling<T>(
     return () => clearInterval(id);
   }, [poll, interval]);
 
-  return { data, isLive };
+  // Lets callers force an immediate refetch (e.g. right after a demo step) so the
+  // graph reacts instantly instead of waiting for the next poll tick.
+  return { data, isLive, refresh: poll };
 }

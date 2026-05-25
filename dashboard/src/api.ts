@@ -1,9 +1,23 @@
-import type { Agent, Bond, ActivityEvent, Stats } from "./types";
+import type {
+  Agent,
+  Bond,
+  ActivityEvent,
+  Stats,
+  DemoMeta,
+  ScenarioOutline,
+  StepTrace,
+} from "./types";
 
 const BASE = "/api";
 
 async function get<T>(path: string): Promise<T> {
   const res = await fetch(`${BASE}${path}`);
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  return res.json();
+}
+
+async function post<T>(path: string): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, { method: "POST" });
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
   return res.json();
 }
@@ -14,3 +28,9 @@ export const fetchActivity = () => get<ActivityEvent[]>("/activity");
 export const fetchStats = () => get<Stats>("/stats");
 export const fetchTrust = (id: string) =>
   get<{ agent_id: string; trust_score: number }>(`/agents/${id}/trust`);
+
+// Guided demo
+export const fetchScenarios = () => get<DemoMeta[]>("/demo/scenarios");
+export const postDemoReset = (scenario: string) =>
+  post<ScenarioOutline>(`/demo/reset?scenario=${encodeURIComponent(scenario)}`);
+export const postDemoStep = () => post<StepTrace>("/demo/step");

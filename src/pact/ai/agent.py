@@ -1,4 +1,17 @@
-"""PACTAgent — an LLM-powered autonomous agent that uses the PACT protocol."""
+"""PACTAgent — an LLM-powered autonomous agent that uses the PACT protocol.
+
+Two ways to drive an agent:
+
+- ``act(instruction)`` — runs the Mercury 2 tool-use loop and prints a colored
+  trace to the terminal (used by ``Demo/ai_demo.py``). Returns the final sentence.
+- ``act_traced(instruction, ...)`` — same loop but returns a *structured trace*
+  (thinking text, tool calls, tool results, inter-agent messages) so the live
+  dashboard can render what the AI thinks and how agents talk to each other.
+
+When ``INCEPTION_API_KEY`` is missing or the LLM call fails, the orchestrator can
+fall back to a deterministic scripted action via ``run_tool_traced`` — the real
+protocol tools still run, only the reasoning text is canned.
+"""
 
 import json
 import os
@@ -16,11 +29,12 @@ YELLOW = "\033[93m"
 MAGENTA = "\033[95m"
 RESET = "\033[0m"
 
+# Business demo agents (see CLAUDE.md gotcha — keep in sync with demo personas).
 AGENT_ICONS = {
-    "Acme Manufacturing": "🏭",
-    "Beta Logistics": "🚚",
-    "Gamma Accounting": "📊",
-    "Delta Supplies": "🔧",
+    "Agent Acheteur": "🏭",
+    "Agent Fournisseur": "🔧",
+    "Agent Logistique": "🚚",
+    "Agent Comptable": "📊",
 }
 
 MODEL = "mercury-2"
@@ -37,10 +51,12 @@ class PACTAgent:
         self.sk, self.pk = generate_keypair()
         self.agent_id: str | None = None
         self.icon = AGENT_ICONS.get(name, "🤖")
+        self.ai_enabled = bool(os.getenv("INCEPTION_API_KEY"))
+        # Only build the LLM client when a key exists; the scripted fallback needs none.
         self.openai = OpenAI(
             api_key=os.getenv("INCEPTION_API_KEY"),
             base_url="https://api.inceptionlabs.ai/v1",
-        )
+        ) if self.ai_enabled else None
         self.http = httpx.Client(base_url=base_url, timeout=10)
 
     def _system_prompt(self) -> str:
@@ -146,12 +162,112 @@ class PACTAgent:
         except Exception as e:
             return {"error": str(e)}
 
-    def act(self, instruction: str) -> str:
-        """Run an OpenAI tool-use loop until the LLM is done."""
-        print(f"\n  {self.icon}  {YELLOW}{self.name}{RESET} is thinking...")
-        print(f"     {DIM}Instruction: {instruction[:100]}{'...' if len(instruction) > 100 else ''}{RESET}")
+    # ── Trace helpers ───────────────────────────────────────────────────────────
+    @staticmethod
+    def _ok(result: dict | list) -> bool:
+        return not (isinstance(result, dict) and "error" in result)
 
-        messages = [
+    def _tool_to_message(self, tool_name: str, args: dict, result, peers: dict | None, default_to: str | None) -> dict | None:
+        """Turn a tool call into an inter-agent message (who → what → whom), or None."""
+        peers = peers or {}
+
+        def name_of(aid):
+            return peers.get(aid, aid) if aid else None
+
+        if tool_name == "propose_bond":
+            terms = args.get("terms", {})
+            return {
+                "from_name": self.name,
+                "to_name": name_of(args.get("accepter_id")) or default_to or "?",
+                "kind": "bond_proposal",
+                "summary": f"Propose un partenariat « {terms.get('service', '?')} »",
+                "payload": terms,
+            }
+        if tool_name == "accept_bond":
+            terms = result.get("terms", {}) if isinstance(result, dict) else {}
+            to = name_of(result.get("proposer_id")) if isinstance(result, dict) else None
+            return {
+                "from_name": self.name,
+                "to_name": to or default_to or "?",
+                "kind": "bond_accept",
+                "summary": f"Accepte et signe le bond « {terms.get('service', '?')} » (Ed25519)",
+                "payload": terms,
+            }
+        if tool_name == "broadcast_intent":
+            return {
+                "from_name": self.name,
+                "to_name": "réseau",
+                "kind": "intent_broadcast",
+                "summary": f"Diffuse un besoin : « {args.get('need', '?')} »",
+                "payload": {"need": args.get("need"), "requirements": args.get("requirements", [])},
+            }
+        if tool_name == "respond_to_intent":
+            return {
+                "from_name": self.name,
+                "to_name": default_to or "demandeur",
+                "kind": "intent_response",
+                "summary": (args.get("message", "") or "")[:90],
+                "payload": {"message": args.get("message", "")},
+            }
+        if tool_name == "query_network":
+            recs = result if isinstance(result, list) else []
+            names = ", ".join(r.get("agent_name", "?") for r in recs) or "aucune"
+            return {
+                "from_name": self.name,
+                "to_name": "réseau de confiance",
+                "kind": "network_query",
+                "summary": f"Demande une recommandation : « {args.get('need', '?')} » → {names}",
+                "payload": {"need": args.get("need"), "recommendations": recs},
+            }
+        if tool_name == "send_interaction_message":
+            data = args.get("data", {})
+            if "check_in" in data:
+                kind, label = "booking_request", "Demande de réservation"
+            elif "booking_id" in data:
+                kind, label = "booking_confirmation", "Confirmation"
+            elif "decision" in data:
+                kind, label = "decision", "Décision"
+            else:
+                kind, label = "message", "Message"
+            summary = ", ".join(f"{k}={v}" for k, v in list(data.items())[:4])
+            return {
+                "from_name": self.name,
+                "to_name": default_to or "partenaire",
+                "kind": kind,
+                "summary": f"{label} — {summary}",
+                "payload": data,
+            }
+        return None
+
+    def run_tool_traced(self, tool_name: str, args: dict, *, peers: dict | None = None, default_to: str | None = None):
+        """Execute one tool and return (result, events, messages) for the trace.
+
+        Used by the orchestrator's deterministic fallback so the dashboard still
+        shows tool calls and inter-agent messages even without the LLM.
+        """
+        events = [{"kind": "tool_call", "tool": tool_name, "args": args}]
+        result = self._execute_tool(tool_name, args)
+        events.append({"kind": "tool_result", "tool": tool_name, "ok": self._ok(result), "result": result})
+        m = self._tool_to_message(tool_name, args, result, peers, default_to)
+        return result, events, ([m] if m else [])
+
+    # ── LLM tool-use loop ───────────────────────────────────────────────────────
+    def act_traced(self, instruction: str, *, peers: dict | None = None,
+                   default_to: str | None = None, verbose: bool = False) -> dict:
+        """Run the Mercury 2 tool-use loop and return a structured trace.
+
+        Raises on a hard LLM/API failure so the caller can fall back. The returned
+        dict has: agent, instruction, events[], messages[], final_text, source.
+        """
+        if verbose:
+            print(f"\n  {self.icon}  {YELLOW}{self.name}{RESET} is thinking...")
+            print(f"     {DIM}Instruction: {instruction[:100]}{'...' if len(instruction) > 100 else ''}{RESET}")
+
+        events: list[dict] = []
+        messages: list[dict] = []
+        final_text = ""
+
+        convo = [
             {"role": "system", "content": self._system_prompt()},
             {"role": "user", "content": instruction},
         ]
@@ -159,7 +275,7 @@ class PACTAgent:
         for _ in range(5):
             response = self.openai.chat.completions.create(
                 model=MODEL,
-                messages=messages,
+                messages=convo,
                 tools=PACT_TOOLS,
                 max_tokens=1000,
             )
@@ -169,27 +285,54 @@ class PACTAgent:
                 # Mercury 2 sometimes returns empty on first try — retry once
                 if not msg.content:
                     continue
-                print(f"     {CYAN}→ {msg.content}{RESET}")
-                return msg.content
+                if verbose:
+                    print(f"     {CYAN}→ {msg.content}{RESET}")
+                final_text = msg.content
+                break
 
-            messages.append(msg)
+            if msg.content:
+                events.append({"kind": "thinking", "text": msg.content})
+
+            convo.append(msg)
             for tc in msg.tool_calls:
                 args = json.loads(tc.function.arguments)
-                args_short = json.dumps(args, separators=(",", ":"))
-                if len(args_short) > 80:
-                    args_short = args_short[:77] + "..."
-                print(f"     {MAGENTA}⚡ {tc.function.name}({args_short}){RESET}")
+                events.append({"kind": "tool_call", "tool": tc.function.name, "args": args})
+                if verbose:
+                    args_short = json.dumps(args, separators=(",", ":"))
+                    if len(args_short) > 80:
+                        args_short = args_short[:77] + "..."
+                    print(f"     {MAGENTA}⚡ {tc.function.name}({args_short}){RESET}")
 
                 result = self._execute_tool(tc.function.name, args)
-                result_str = json.dumps(result, separators=(",", ":"))
-                if len(result_str) > 100:
-                    result_str = result_str[:97] + "..."
-                print(f"     {DIM}   ← {result_str}{RESET}")
+                events.append({"kind": "tool_result", "tool": tc.function.name, "ok": self._ok(result), "result": result})
+                if verbose:
+                    result_str = json.dumps(result, separators=(",", ":"))
+                    if len(result_str) > 100:
+                        result_str = result_str[:97] + "..."
+                    print(f"     {DIM}   ← {result_str}{RESET}")
 
-                messages.append({
+                m = self._tool_to_message(tc.function.name, args, result, peers, default_to)
+                if m:
+                    messages.append(m)
+
+                convo.append({
                     "role": "tool",
                     "tool_call_id": tc.id,
                     "content": json.dumps(result),
                 })
 
-        return "Max iterations reached"
+        if not final_text:
+            final_text = "Action effectuée."
+
+        return {
+            "agent": self.name,
+            "instruction": instruction,
+            "events": events,
+            "messages": messages,
+            "final_text": final_text,
+            "source": "ai",
+        }
+
+    def act(self, instruction: str) -> str:
+        """Run the tool-use loop with terminal output; return the final sentence."""
+        return self.act_traced(instruction, verbose=True)["final_text"]

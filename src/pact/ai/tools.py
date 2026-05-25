@@ -173,7 +173,7 @@ PACT_TOOLS = [
                 "type": "object",
                 "properties": {
                     "bond_id": {"type": "string", "description": "The bond ID to interact on"},
-                    "template": {"type": "string", "enum": ["request_quote", "place_order"], "description": "Interaction template"},
+                    "template": {"type": "string", "enum": ["request_quote", "place_order", "request_booking"], "description": "Interaction template"},
                 },
                 "required": ["bond_id", "template"],
             },
